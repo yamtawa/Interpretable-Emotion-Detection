@@ -1,0 +1,25 @@
+GENERAL:
+  SAVED_MODEL_NAME:
+    - True
+    - bert-base-uncased_try1
+
+DATASET_PARAMS:
+  DATASET_NAME: dair-ai/emotion      #Choose one of [ "dair-ai/emotion","jeffnyman/emotions","go_emotions"]
+  BATCH_SIZE: 16
+
+MODELS_PARAMS:
+  MODEL_NAME: bert-base-uncased
+
+
+TRAINING_PLAN:
+  step1:
+    CRITERION_NAME: CE
+    SCHEDULER_NAME: CosineAnnealingLR # TODO- add this to the training, it uses this as default right now
+    OPTIMIZER_NAME: Adam
+    LR_FEATURES: 0.0001
+    LR_HEAD: 0.0001
+    WEIGHT_DECAY: 0.01
+    MOMENTUM: 0.1
+    NUM_EPOCHS: 20
+    TRAINING_PHASE: train_from_scratch   #choose one of [train_from_scratch, retrain, eval]
+    FINE_TUNE_ONLY: True
