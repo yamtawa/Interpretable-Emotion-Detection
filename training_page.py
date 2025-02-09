@@ -51,7 +51,7 @@ def eval(model, loader, criterion, device):
             data = batch["input_ids"].to(device)
             attention_mask = batch["attention_mask"].to(device)
             target = batch["labels"].to(device)
-            logits, all_hidden_states = model(data)
+            logits, all_hidden_states = model(data,attention_mask)
             loss = criterion(logits, target.long())
             running_loss += loss.item()
             predictions = torch.argmax(logits, dim=1) # TODO- MAKE THIS ADAPTABLE TO MULTILABEL CLASSIFICATION ALSO

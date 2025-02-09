@@ -1,7 +1,9 @@
+import os
 import torch
 
 
 def save_best_weights(model, optimizer, epoch, val_loss, save_path):
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
     state = {
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
