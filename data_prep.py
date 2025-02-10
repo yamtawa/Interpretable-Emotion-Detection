@@ -1,8 +1,8 @@
+from collections import defaultdict
 import torch
 from torch.utils.data import DataLoader, Dataset, random_split
 from datasets import load_dataset
 from transformers import BertTokenizer
-
 
 class EmotionDataset(Dataset):
     def __init__(self, dataset_name='go_emotions', split='train', max_length=128):
@@ -47,15 +47,41 @@ class EmotionDataset(Dataset):
         }
 
 
-def get_dataloader(dataset_name='go_emotions', batch_size=16, split='train'):
+def get_dataloader(dataset_name='go_emotions', batch_size=16, split='train',ratio_small=2,labels_dl=False):
+    torch.manual_seed(55) # prevents data leakage
     dataset = EmotionDataset(dataset_name=dataset_name, split=split)
+    small_size = len(dataset) // ratio_small
+    large_size = len(dataset) - small_size
+    large_dataset, small_dataset = random_split(dataset, [large_size, small_size])
+    if not labels_dl:
+        large_loader = DataLoader(large_dataset, batch_size=batch_size, shuffle=False)
+        small_loader = DataLoader(small_dataset, batch_size=batch_size, shuffle=False)
+        return large_loader, small_loader
 
-    if split == "test":
-        test_size = len(dataset) // 2
-        eval_size = len(dataset) - test_size
-        eval_dataset, test_dataset = random_split(dataset, [eval_size, test_size])
-        eval_loader = DataLoader(eval_dataset, batch_size=batch_size, shuffle=False)
-        test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-        return eval_loader, test_loader
+    # large_label_dataloaders = build_label_dataloaders(large_dataset, batch_size)
+    small_label_dataloaders = build_label_dataloaders(small_dataset, batch_size)
+    return None, small_label_dataloaders
 
-    return DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+
+def build_label_dataloaders(subset, batch_size):
+        label_to_samples = defaultdict(list)
+        # Group samples by label.
+        for idx in range(len(subset)):
+            sample = subset[idx]
+            # Ensure we use a Python int as the key.
+            label = sample["labels"].item() if isinstance(sample["labels"], torch.Tensor) else sample["labels"]
+            label_to_samples[label].append(sample)
+
+        # Create a DataLoader for each label group.
+        dataloaders = {}
+        for label, samples in label_to_samples.items():
+            input_ids = torch.stack([s["input_ids"] for s in samples])
+            attention_mask = torch.stack([s["attention_mask"] for s in samples])
+            # Convert the label tensor to a scalar tensor.
+            labels_tensor = torch.tensor([s["labels"].item() for s in samples], dtype=torch.long)
+            dataset = torch.utils.data.TensorDataset(input_ids, attention_mask, labels_tensor)
+            dataloaders[label] = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+        return dataloaders
+
+

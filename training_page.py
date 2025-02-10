@@ -39,6 +39,10 @@ def train(model, train_loader, optimizer, criterion, device):
         loss.backward()
         optimizer.step()
         running_loss += loss.item()
+        if device == 'cuda':
+            # Free up memory after each batch
+            del data, attention_mask, target, logits
+            torch.cuda.empty_cache()
     return running_loss / len(train_loader), model
 
 
@@ -57,6 +61,10 @@ def eval(model, loader, criterion, device):
             predictions = torch.argmax(logits, dim=1) # TODO- MAKE THIS ADAPTABLE TO MULTILABEL CLASSIFICATION ALSO
             correct += (predictions == target).sum().item()
             total += target.size(0)
+            if device == 'cuda':
+                # Free up memory after each batch
+                del data, attention_mask, target, logits
+                torch.cuda.empty_cache()
 
         accuracy = correct / total if total > 0 else 0
     return running_loss / len(loader),accuracy,model
