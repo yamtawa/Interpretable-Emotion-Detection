@@ -1,4 +1,5 @@
 import os
+import torch.optim as optim
 
 import torch
 import torch.nn as nn
@@ -123,7 +124,7 @@ class SparseAutoencoder_Conv(nn.Module):
         return total_loss, sparsity_loss
 
 
-def training_loop(model, dataloader, optimizer, epochs=10, device='cpu'):
+def training_loop(model, dataloader, optimizer,scheduler, epochs=10, device='cpu'):
     model.to(device)
     model.train()
     loss_history = []
@@ -148,6 +149,7 @@ def training_loop(model, dataloader, optimizer, epochs=10, device='cpu'):
             loss,sparsity_loss = model.sparse_reconstruction_loss(input_tensor, output, P)
             loss.backward()
             optimizer.step()
+            scheduler.step()
 
             total_loss += loss.item()
             total_loss_sparse+=sparsity_loss.item()
@@ -229,7 +231,8 @@ def run():
         model = SparseAutoencoder_Linear(input_size=input_size[-1], latent_channels=100)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-    loss_history,sparsity_loss=training_loop(model, dataloader, optimizer, epochs=5000,device=device)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=0.000001)
+    loss_history,sparsity_loss=training_loop(model, dataloader, optimizer,scheduler, epochs=epochs,device=device)
     plot_loss(loss_history, sparsity_loss)
 
 # Example usage
@@ -238,6 +241,7 @@ if __name__ == '__main__':
     input_size = (1,50,50)
     wanted_model="CONV"
     run_name='try1_CONV_no_labels_one_chanel'
+    epochs=5000
 
     CFG = load_config(config_name='config')
     path_to_pkl=r'saved_activations/activations_dict.pkl'
