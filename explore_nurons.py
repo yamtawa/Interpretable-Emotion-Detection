@@ -1,9 +1,12 @@
+import os
+
 import torch
 from sklearn.linear_model import LogisticRegression
 from sklearn.cluster import KMeans
 import scipy.stats
 from utils import get_wanted_label,get_dict_labels
 from collections import defaultdict
+import pickle
 
 
 def get_function_from_name(function_name):
@@ -18,42 +21,62 @@ def get_function_from_name(function_name):
     raise ValueError(
         "Unknown exploration function name. Choose one of [extract_neuron_activations,compute_neuron_correlation,train_probing_classifier,compute_saliency,cluster_neurons]")
 
+def load_pkl2dict(dict_path):
+    with open(dict_path, 'rb') as f:
+        dic = pickle.load(f)
+    return dic
+
+def save_dict2pkl(dict_path,dict):
+    os.makedirs(os.path.dirname(dict_path),exist_ok=True)
+    with open(dict_path, 'wb') as f:
+        pickle.dump(dict, f, protocol=pickle.HIGHEST_PROTOCOL)
+
 # TODO - Consider the case when you want to differentiate between true predictions and false predictions of a label.
 
-def loop_batches(model, dataloaders, device, criterion, function_name='extract_neuron_activations',wanted_labels='all'):
+def loop_batches(model, dataloaders, device, criterion, function_name='extract_neuron_activations',wanted_labels='all',saved_activations_path=r'saved_activations'):
     exp_func = get_function_from_name(function_name)
     keys,wanted_labels = get_wanted_label(wanted_labels)  # keys is a list of keys
     values = [dataloaders[key] for key in keys if key in dataloaders]
     neurons_all_activations = {}
     neurons_all_gradients = {}
-    for idx, dataloader in enumerate(values):
-        neuron_label_activation = defaultdict(lambda: None)
-        neuron_label_gradients = defaultdict(lambda: None)
-        for batch in dataloader:
-            data = batch[0].to(device)
-            attention_mask = batch[1].to(device)
-            target = batch[2].to(device)
-            model.zero_grad()
-            logits, hidden_states = model(data, attention_mask)
-            for layer in hidden_states:
-                layer.retain_grad()
-            loss = criterion(logits, target)
-            loss.backward()
-            for layer_idx, layer in enumerate(hidden_states):
-                layer_cpu = layer.clone().detach().cpu()  # Move to CPU for good memory allocation
-                grad_cpu = layer.grad.clone().detach().cpu()
-                if neuron_label_activation[layer_idx] is None:
-                    neuron_label_activation[layer_idx] = layer_cpu
-                    neuron_label_gradients[layer_idx] = grad_cpu
-                else:
-                    neuron_label_activation[layer_idx] = torch.cat((neuron_label_activation[layer_idx], layer_cpu),dim=0)
-                    neuron_label_gradients[layer_idx] = torch.cat((neuron_label_gradients[layer_idx], grad_cpu), dim=0)
-            if device=='cuda':
-                # Free up memory after each batch
-                del data, attention_mask, target, logits, hidden_states
-                torch.cuda.empty_cache()  # Clear CUDA cache
-        neurons_all_activations[wanted_labels[idx]] = torch.stack(list(neuron_label_activation.values()))
-        neurons_all_gradients[wanted_labels[idx]] = torch.stack(list(neuron_label_gradients.values()))
+    activations_dict_path=os.path.join(saved_activations_path,'activations_dict.pkl')
+    grad_activations_dict_path=os.path.join(saved_activations_path,'grad_activations_dict.pkl')
+
+    if os.path.isfile(activations_dict_path) and os.path.isfile(grad_activations_dict_path):
+        neurons_all_activations=load_pkl2dict(activations_dict_path)
+        neurons_all_gradients = load_pkl2dict(grad_activations_dict_path)
+    else:
+        for idx, dataloader in enumerate(values):
+            neuron_label_activation = defaultdict(lambda: None)
+            neuron_label_gradients = defaultdict(lambda: None)
+            for batch in dataloader:
+                data = batch[0].to(device)
+                attention_mask = batch[1].to(device)
+                target = batch[2].to(device)
+                model.zero_grad()
+                logits, hidden_states = model(data, attention_mask)
+                for layer in hidden_states:
+                    layer.retain_grad()
+                loss = criterion(logits, target)
+                loss.backward()
+                for layer_idx, layer in enumerate(hidden_states):
+                    layer_cpu = layer.clone().detach().cpu()  # Move to CPU for good memory allocation
+                    grad_cpu = layer.grad.clone().detach().cpu()
+                    if neuron_label_activation[layer_idx] is None:
+                        neuron_label_activation[layer_idx] = layer_cpu
+                        neuron_label_gradients[layer_idx] = grad_cpu
+                    else:
+                        neuron_label_activation[layer_idx] = torch.cat((neuron_label_activation[layer_idx], layer_cpu),dim=0)
+                        neuron_label_gradients[layer_idx] = torch.cat((neuron_label_gradients[layer_idx], grad_cpu), dim=0)
+                if device=='cuda':
+                    # Free up memory after each batch
+                    del data, attention_mask, target, logits, hidden_states
+                    torch.cuda.empty_cache()  # Clear CUDA cache
+            neurons_all_activations[wanted_labels[idx]] = torch.stack(list(neuron_label_activation.values()))
+            neurons_all_gradients[wanted_labels[idx]] = torch.stack(list(neuron_label_gradients.values()))
+        save_dict2pkl(activations_dict_path, neurons_all_activations)
+        save_dict2pkl(grad_activations_dict_path, neurons_all_gradients)
+
     d_labels=get_dict_labels(neurons_all_activations,keys,wanted_labels)
     exp_func(neurons_all_activations,d_labels)
 
