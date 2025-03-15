@@ -18,3 +18,4 @@ def get_dict_labels(neurons_all_activations, keys, wanted_labels):
         for label_wr, activation in neurons_all_activations.items()
         if label_wr in keys
     }
+

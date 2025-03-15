@@ -21,7 +21,7 @@ def load_best_weights(model, optimizer, load_path):
     epoch = checkpoint['epoch']
     val_loss = checkpoint['val_loss']
     print(f"Loaded best weights from {load_path}, Epoch: {epoch}, Validation Loss: {val_loss}")
-    return model, val_loss
+    return model, optimizer, val_loss
 
 
 
