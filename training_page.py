@@ -171,12 +171,12 @@ def training_loop_SAE(model, train_loader, test_loader, optimizer, criterion, de
         train_loss_l.append(train_loss)
     # Save the final model at the end of training
     final_model_path = os.path.join(os.getcwd(), 'models_weights',
-                                    f"SAE__try1_final_{scale}.pth")
+                                    f"SAE_try1_final_{scale}_layer{current_config['NEURON_DATASET_PARAMS']['LAYER_IDX']}.pth")
     save_best_weights(model, optimizer, num_epochs, val_loss, final_model_path)
     print(f"✅ Final model saved at epoch {num_epochs}")
     if plot_loss:
         # Plot the loss curves
-        plot_loss_curve(train_loss_l, val_loss_l, save_path=os.path.join(os.getcwd(), 'figures', f"loss_plot_SAE_{scale}.png"))
+        plot_loss_curve(train_loss_l, val_loss_l, save_path=os.path.join(os.getcwd(), 'figures', f"loss_plot_SAE_{scale}_layer{current_config['NEURON_DATASET_PARAMS']['LAYER_IDX']}.png"))
 
     return model, best_val_loss
 

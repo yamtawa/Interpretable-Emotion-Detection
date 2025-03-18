@@ -52,7 +52,7 @@ def get_activations_main():
     weights_path=os.path.join(os.getcwd(), 'models_weights',f"{current_config['GENERAL']['SAVED_MODEL_NAME'][1]}.pth")
     if os.path.isfile(weights_path):
         model, _ = load_best_weights(model, optimizer, weights_path)
-    loop_batches(model,dataloader_explore,device,criterion=criterion,function_name=current_config['CURRENT_STEP']['NEURONS_FUNCTION_NAME'],wanted_labels=current_config['CURRENT_STEP']['WANTED_LABELS'] )
+    loop_batches(model,dataloader_explore,device,criterion=criterion,wanted_labels=current_config['CURRENT_STEP']['WANTED_LABELS'], layer_index=current_config["NEURON_DATASET_PARAMS"]["LAYER_IDX"])
 
 def train_SAE_main():
     best_val_loss = np.inf
@@ -66,7 +66,7 @@ def train_SAE_main():
     # Load Train & Validation DataLoaders
     dataloader_train, dataloader_eval, dataloader_test = get_neuron_dataloader(
         wanted_labels=current_config['CURRENT_STEP']['WANTED_LABELS'],
-        layer_indexes=[0],  # Example: select specific layers
+        layer_index=current_config["NEURON_DATASET_PARAMS"]["LAYER_IDX"],  # Example: select specific layers
         data_type="activations",
         batch_size=current_config["NEURON_DATASET_PARAMS"]["BATCH_SIZE"], N=current_config['CURRENT_STEP']['LANG_INPUT']
     )
@@ -102,9 +102,9 @@ def explore_neurons_main():
     # Load Train & Validation DataLoaders
     dataloader_train, dataloader_eval, dataloader_test = get_neuron_dataloader(
         wanted_labels=current_config['CURRENT_STEP']['WANTED_LABELS'],
-        layer_indexes=[0],  # Example: select specific layers
+        layer_index=current_config['NEURON_DATASET_PARAMS']['LAYER_IDX'],  # Example: select specific layers
         data_type="activations",
-        batch_size=current_config["NEURON_DATASET_PARAMS"]["BATCH_SIZE"], N=current_config['CURRENT_STEP']['LANG_INPUT']
+        batch_size=current_config['CURRENT_STEP']['LANG_INPUT'], N=current_config['CURRENT_STEP']['LANG_INPUT']
     )
 
     print(f"Train samples: {len(dataloader_train.dataset)}")
@@ -117,12 +117,12 @@ def explore_neurons_main():
               d_feat_scale=current_config['CURRENT_STEP']['OUT_SCALE']).to(device)  # Assuming hidden size = 768
     optimizer = torch.optim.Adam(model.parameters(), lr=current_config['CURRENT_STEP']['LR_SAE'],
         weight_decay=current_config['CURRENT_STEP']['WEIGHT_DECAY'])
+    scale = str(current_config['CURRENT_STEP']['OUT_SCALE']).replace(".", "")
+    model, optimizer, val_loss = load_best_weights(model, optimizer, os.path.join(os.getcwd(), 'models_weights', f"{current_config['CURRENT_STEP']['MODEL']}_try1_final_{scale}_layer{current_config['NEURON_DATASET_PARAMS']['LAYER_IDX']}.pth"))
 
-    model, optimizer, val_loss = load_best_weights(model, optimizer, os.path.join(os.getcwd(), 'models_weights', f"{current_config['CURRENT_STEP']['MODEL']}_try1_final.pth"))
+    predict_layer_activation(model, dataloader_eval, device, layer_idx=current_config['NEURON_DATASET_PARAMS']['LAYER_IDX'], scale_str=scale)
 
-    predict_layer_activation(model, dataloader_test, device,)
 
-    a=5
 
 if __name__ == "__main__":
     config = load_config(config_name='config')

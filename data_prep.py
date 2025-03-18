@@ -64,10 +64,10 @@ def get_dataloader(dataset_name='go_emotions', batch_size=16, split='train',rati
     small_label_dataloaders = build_label_dataloaders(small_dataset, batch_size)
     return None, small_label_dataloaders
 
-def get_neuron_dataloader(wanted_labels=['anger','fear'], layer_indexes=[0], data_type='activations',
+def get_neuron_dataloader(wanted_labels=['anger','fear'], layer_index=0, data_type='activations',
                           batch_size=16, train_ratio=0.85, test_ratio=0.05, shuffle=True, N=128):
     torch.manual_seed(55) # prevents data leakage
-    dataset = LayerDataset(data_dir="data", wanted_labels=wanted_labels, layer_indexes=layer_indexes,
+    dataset = LayerDataset(data_dir="data", wanted_labels=wanted_labels, layer_index=layer_index,
                             data_type=data_type)
     total_size = len(dataset)
     train_size = int(total_size * train_ratio)
@@ -96,7 +96,7 @@ def get_neuron_dataloader(wanted_labels=['anger','fear'], layer_indexes=[0], dat
 
     # Shuffle the train and validation row datasets
     train_loader = DataLoader(train_row_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_row_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_row_dataset, batch_size=batch_size, shuffle=False)
 
     # Each batch is the sorted layer rows - each layer size N
     test_loader = DataLoader(test_row_dataset, batch_size=N, shuffle=False)
@@ -127,12 +127,12 @@ def build_label_dataloaders(subset, batch_size):
 
 
 class LayerDataset(Dataset):
-    def __init__(self, data_dir='data', wanted_labels=None, layer_indexes=None, data_type='both', row_neurons_flag=True):
+    def __init__(self, data_dir='data', wanted_labels=None, layer_index=0, data_type='both', row_neurons_flag=True):
         """
         Args:
             data_dir (str): Path to directory where activation files are stored.
             wanted_labels (list): List of sentiment labels to include (e.g., ["anger", "fear"]).
-            layer_indexes (list): List of layer indexes to include (e.g., [0, 3, 5]).
+            layer_index (int): layer index
             data_type (str): "activations", "gradients", or "both" (default: "both").
         """
         if wanted_labels is None:
@@ -143,7 +143,7 @@ class LayerDataset(Dataset):
 
         self.data_dir = data_dir
         self.data_type = data_type
-        self.layer_indexes = layer_indexes if layer_indexes else None
+        # self.layer_indexes = layer_indexes if layer_indexes else None
 
         # Get label mappings
         self.label_mapping, self.labels = get_wanted_label(wanted_labels)
@@ -152,7 +152,7 @@ class LayerDataset(Dataset):
 
         # Load each sentiment file
         for sentiment in self.labels:
-            file_path = os.path.join(data_dir, f"activations_grads_{sentiment}_layer0.pt")
+            file_path = os.path.join(data_dir, f"activations_grads_{sentiment}_layer{layer_index}.pt")
 
             if not os.path.exists(file_path):
                 print(f"⚠️ Warning: {file_path} not found. Skipping this sentiment.")
@@ -172,15 +172,15 @@ class LayerDataset(Dataset):
                 label_idx = self.label_mapping[self.labels.index(sentiment)]  # Convert sentiment to numeric label
 
                 # Select only specified layers
-                selected_layers = self.layer_indexes if self.layer_indexes else list(range(L))
+                # selected_layers = self.layer_indexes if self.layer_indexes else list(range(L))
 
                 # Flatten dataset: Iterate over selected layers and samples
-                for layer_idx in selected_layers:
-                    for sample_idx in range(N):
-                        activation = activations[layer_idx, sample_idx] if self.data_type in ["activations",
-                                                                                              "both"] else None
-                        gradient = gradients[layer_idx, sample_idx] if self.data_type in ["gradients", "both"] else None
-                        self.all_data.append((activation, gradient, label_idx, layer_idx))
+                # for layer_idx in selected_layers:
+                for sample_idx in range(N):
+                    activation = activations[0, sample_idx] if self.data_type in ["activations",
+                                                                                          "both"] else None
+                    gradient = gradients[0, sample_idx] if self.data_type in ["gradients", "both"] else None
+                    self.all_data.append((activation, gradient, label_idx, layer_index))
 
                 print(f"✅ Loaded {sentiment}: {activations.shape}")
 

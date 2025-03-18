@@ -61,3 +61,26 @@ class SAELoss(nn.Module):
         self.reconstruction_losses.append(loss_recon.item())
         # self.sparsity_losses.append(loss_sparsity.item())
         return loss, loss_recon, loss_sparsity
+
+
+class SAE_classifier(nn.Module):
+    def __init__(self, input_dim, d_feat_scale=2):
+        super(SAE_classifier, self).__init__()
+        self.input_dim = input_dim
+        self.d_feat_scale = d_feat_scale
+        self.d_feat_dim = int(self.input_dim * self.d_feat_scale)
+
+        self.Encoder = nn.Linear(self.input_dim, self.d_feat_dim, bias=True)
+
+        self.Decoder = nn.Linear(self.d_feat_dim, self.input_dim, bias=False)
+        # self.Decoder.weight = nn.Parameter(self.Encoder.weight.T)
+        nn.init.orthogonal_(self.Decoder.weight)
+    def forward(self, x):
+        B, d = x.shape
+        c = F.relu(self.Encoder(x)) ### (B, d_feat_dim)
+
+        x_hat = self.Decoder(c) ### (B, input_dim)
+
+        F_matrix = self.Decoder.weight.T ### (d_feat_dim, input_dim)
+
+        return x_hat, c, F_matrix

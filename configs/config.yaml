@@ -9,7 +9,7 @@ DATASET_PARAMS:
 
 NEURON_DATASET_PARAMS:
   DATASET_NAME: layer_activations
-  DATASET_FILENAME: data/activations_grads_anger_layer0.pt # Choose one of activations_grads_{sentiment}.pt
+  LAYER_IDX: 1
   BATCH_SIZE: 256
   ROW_NEURONS: True
 
@@ -33,7 +33,7 @@ PIPLINE:
 
   step2:
     TITLE: MODEL_TRAINING
-    ACTIVATE: True
+    ACTIVATE: False
     MODEL: SAE
     WANTED_LABELS: [ 'anger','fear' ]  #choose one of 'all' ['angry','happy'] ...
     CRITERION_NAME: SAELoss
@@ -46,20 +46,20 @@ PIPLINE:
     LANG_D: 768
     OUT_SCALE: 0.25
     MOMENTUM: 0.1
-    NUM_EPOCHS: 10
+    NUM_EPOCHS: 20
     TRAINING_PHASE: train_from_scratch   #choose one of [train_from_scratch, retrain, eval]
     FINE_TUNE_ONLY: False
 
   step3:
     TITLE: EXPLORE_WITH_SAE
-    ACTIVATE: False
+    ACTIVATE: True
     MODEL: SAE
     WANTED_LABELS: [ 'anger','fear' ]  #choose one of 'all' ['angry','happy'] ...
     CRITERION_NAME: SAELoss
     SCHEDULER_NAME: CosineAnnealingLR # TODO- add this to the training, it uses this as default right now
     OPTIMIZER_NAME: Adam
     LR_SAE: 0.001
-    ALPHA_SPARSITY: 0.5
+    ALPHA_SPARSITY: 1
     WEIGHT_DECAY: 0.0001
     LANG_INPUT: 128
     LANG_D: 768

@@ -24,11 +24,11 @@ def visualize_layer_activations(activations, label, reduction_type='mean', layer
         plt.title(f"Activations for Layer {layer_idx} (Label: {label})")
         plt.show()
 
-def visualize_c_heatmap(c, sentiment,save_path=None):
+def visualize_c_heatmap(c, sentiment,save_path=None, scale_str='2'):
     plt.figure(figsize=(12, 6))
     sns.heatmap(c, cmap="Reds", cbar=True, linewidths=0.5)
 
-    plt.xlabel("Dictionary Features (2d)")
+    plt.xlabel(f"Dictionary Features ({scale_str}d)")
     plt.ylabel("Tokens (N)")
     plt.title(f"Sparse Encoding Heatmap (c Matrix), real sentiment: {sentiment}")
 

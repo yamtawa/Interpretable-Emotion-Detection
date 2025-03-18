@@ -25,9 +25,9 @@ def get_function_from_name(function_name):
 
 # TODO - Consider the case when you want to differentiate between true predictions and false predictions of a label.
 
-def loop_batches(model, dataloaders, device, criterion, function_name='extract_neuron_activations',wanted_labels='all', save_flag=True,
-                 save_dir='data'):
-    exp_func = get_function_from_name(function_name)
+def loop_batches(model, dataloaders, device, criterion, wanted_labels='all', save_flag=True,
+                 save_dir='data', layer_index=0):
+
     keys,wanted_labels = get_wanted_label(wanted_labels)  # keys is a list of keys
     values = [dataloaders[key] for key in keys if key in dataloaders]
 
@@ -50,7 +50,9 @@ def loop_batches(model, dataloaders, device, criterion, function_name='extract_n
             loss = criterion(logits, target)
             loss.backward()
             for layer_idx, layer in tqdm(enumerate(hidden_states)):
-                if layer_idx>0:
+                if layer_idx<layer_index:
+                    continue
+                elif layer_idx>layer_index:
                     break
                 layer_cpu = layer.clone().detach().cpu()  # Move to CPU for good memory allocation
                 grad_cpu = layer.grad.clone().detach().cpu()
@@ -68,7 +70,7 @@ def loop_batches(model, dataloaders, device, criterion, function_name='extract_n
         neurons_all_gradients[wanted_labels[idx]] = torch.stack(list(neuron_label_gradients.values()))
         if save_flag:
             os.makedirs(save_dir, exist_ok=True)
-            filename = 'activations_grads_' + wanted_labels[idx] + '_layer0.pt'
+            filename = 'activations_grads_' + wanted_labels[idx] + f'_layer{layer_index}.pt'
             save_dict = {
                 "activations": neurons_all_activations[wanted_labels[idx]][0].unsqueeze(0),  # Dictionary of {label: tensor}, saving 0 layer only
                 "gradients": neurons_all_gradients[wanted_labels[idx]][0].unsqueeze(0)  # Dictionary of {label: tensor}, saving 0 layer only
@@ -78,10 +80,14 @@ def loop_batches(model, dataloaders, device, criterion, function_name='extract_n
 
 
 
-def predict_layer_activation(model, dataloader, device, wanted_labels=['anger','fear'], N=128, layer_idx=0):
+def predict_layer_activation(model, dataloader, device, wanted_labels=['anger','fear'], N=128, layer_idx=0, scale_str='2'):
     model.eval()
     keys, wanted_labels = get_wanted_label(wanted_labels)
-    for layer in tqdm(dataloader, desc="Testing progress", ascii=True):
+    c_fear_sum = 0
+    fear_counter = 0
+    c_anger_sum = 0
+    anger_counter = 0
+    for idx, layer in tqdm(enumerate(dataloader), desc="Testing progress", ascii=True):
         activation, label = layer
         sentiment = wanted_labels[label[0].item()]
         activation = (activation - activation.mean(dim=1, keepdim=True)) / (activation.std(dim=1, keepdim=True) + 1e-5)
@@ -89,9 +95,19 @@ def predict_layer_activation(model, dataloader, device, wanted_labels=['anger','
         activation = activation.to(device)
         x_hat, c, F_matrix = model(activation)
         x_hat, c, F_matrix = x_hat.detach().cpu().numpy(), c.detach().cpu().numpy(), F_matrix.detach().cpu().numpy()
-        visualize_c_heatmap(c[:50, :50], sentiment, save_path='figures/testing_fig.png')
-        a=5
+        # visualize_c_heatmap(c, sentiment, save_path=f'figures/testing_fig_{scale_str}_{sentiment}.png', scale_str=scale_str)
+        if label[0].item() == 0:
+            c_anger_sum += c
+            anger_counter += 1
+        else:
+            c_fear_sum += c
+            fear_counter += 1
+    c_anger_avg = c_anger_sum / anger_counter
+    c_fear_avg = c_fear_sum / fear_counter
+    visualize_c_heatmap(c_anger_avg, 'anger', save_path=f'figures/anger_avg_layer{layer_idx}', scale_str=scale_str)
+    visualize_c_heatmap(c_fear_avg, 'fear', save_path=f'figures/fear_avg_layer{layer_idx}', scale_str=scale_str)
 
+    a=5
 
 
 def get_most_activated_neurons_per_label(neurons_all_activations: dict,d_labels:dict):
