@@ -73,6 +73,7 @@ if __name__ == '__main__':
             union_features = union_features.union(set(top_k_features[label]))
         union_features = list(union_features)
         print(f"n Union features: {len(union_features)}")
+        print(f"Union features: {union_features}")
 
         # features_dict = {}
         # for label in wanted_labels:
