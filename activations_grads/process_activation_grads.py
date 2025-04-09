@@ -66,6 +66,7 @@ if __name__ == '__main__':
             common_features = common_features.intersection(set(top_k_features[label]))
         common_features = list(common_features)
         print(f"n Common features: {len(common_features)}")
+        print(f"Common features: {common_features}")
 
         # union the top k features
         union_features = set(top_k_features[wanted_labels[0]])
