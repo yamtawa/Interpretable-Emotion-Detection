@@ -3,6 +3,8 @@ import torch
 from torch.utils.data import DataLoader, Dataset, random_split
 from datasets import load_dataset
 from transformers import BertTokenizer
+from load_config import load_label_map
+
 
 class EmotionDataset(Dataset):
     def __init__(self, dataset_name='go_emotions', split='train', max_length=128):
@@ -15,12 +17,10 @@ class EmotionDataset(Dataset):
             self.num_labels = 27  # Multi-label classification
         elif dataset_name == "dair-ai/emotion":
             self.dataset = load_dataset("dair-ai/emotion", split=split)
-            self.label_map = {"anger": 0, "fear": 1, "joy": 2, "love": 3, "sadness": 4,
-                              "surprise": 5}  # Single-label classification
+            self.label_map = load_label_map("dair-ai/emotion")
         elif dataset_name == "jeffnyman/emotions":
             self.dataset = load_dataset("jeffnyman/emotions", split=split)
-            self.label_map = {"anger": 0, "fear": 1, "joy": 2, "love": 3, "sadness": 4,
-                              "surprise": 5}  # Single-label classification
+            self.label_map = load_label_map("jeffnyman/emotions")
         else:
             raise ValueError("Unsupported dataset")
 

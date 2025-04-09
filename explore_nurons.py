@@ -4,7 +4,12 @@ from sklearn.cluster import KMeans
 import scipy.stats
 from utils import get_wanted_label,get_dict_labels
 from collections import defaultdict
-
+import os
+from tqdm import tqdm
+from load_config import load_config
+import gzip
+import joblib
+import pickle
 
 def get_function_from_name(function_name):
     if function_name == 'get_most_activated_neurons_per_label':
@@ -20,16 +25,17 @@ def get_function_from_name(function_name):
 
 # TODO - Consider the case when you want to differentiate between true predictions and false predictions of a label.
 
-def loop_batches(model, dataloaders, device, criterion, function_name='extract_neuron_activations',wanted_labels='all'):
+def loop_batches(model, dataloaders, device, criterion, function_name='extract_neuron_activations',wanted_labels='all',save_flag=True,save_dir='activations_grads'):
     exp_func = get_function_from_name(function_name)
-    keys,wanted_labels = get_wanted_label(wanted_labels)  # keys is a list of keys
+    keys,wanted_labels = get_wanted_label(wanted_labels, load_config()["DATASET_PARAMS"]["DATASET_NAME"])  # keys is a list of keys
     values = [dataloaders[key] for key in keys if key in dataloaders]
     neurons_all_activations = {}
     neurons_all_gradients = {}
-    for idx, dataloader in enumerate(values):
+    for idx, dataloader in tqdm(enumerate(values)):
         neuron_label_activation = defaultdict(lambda: None)
         neuron_label_gradients = defaultdict(lambda: None)
-        for batch in dataloader:
+        for batch_idx, batch in enumerate(dataloader):
+            print(f"Batch {batch_idx + 1}/{len(dataloader)}")
             data = batch[0].to(device)
             attention_mask = batch[1].to(device)
             target = batch[2].to(device)
@@ -54,6 +60,17 @@ def loop_batches(model, dataloaders, device, criterion, function_name='extract_n
                 torch.cuda.empty_cache()  # Clear CUDA cache
         neurons_all_activations[wanted_labels[idx]] = torch.stack(list(neuron_label_activation.values()))
         neurons_all_gradients[wanted_labels[idx]] = torch.stack(list(neuron_label_gradients.values()))
+        if save_flag:
+            os.makedirs(save_dir, exist_ok=True)
+            filename = 'activations_grads_' + wanted_labels[idx] + '.gz'
+            save_dict = {
+                "activations": neurons_all_activations[wanted_labels[idx]],  # Dictionary of {label: tensor}
+                "gradients": neurons_all_gradients[wanted_labels[idx]]# Dictionary of {label: tensor}
+            }
+            with gzip.open(os.path.join(save_dir, filename), 'wb') as f:
+                pickle.dump(save_dict, f, protocol=pickle.HIGHEST_PROTOCOL)
+            print(
+                f'Saved {len(dataloader.dataset)} activations and grads for {wanted_labels[idx]} to file: {os.path.join(save_dir, filename)}')
     d_labels=get_dict_labels(neurons_all_activations,keys,wanted_labels)
     exp_func(neurons_all_activations,d_labels)
 

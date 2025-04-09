@@ -6,10 +6,11 @@ def extract_layer_activation(model, input_ids, attention_mask, layer_index):
     return hidden_states[layer_index]  # Returns the activation map of the specified layer
 
 
-def get_wanted_label(wanted_labels):
-    label_maping={"anger": 0, "fear": 1, "joy": 2, "love": 3, "sadness": 4, "surprise": 5}
+def get_wanted_label(wanted_labels, model = 'dair-ai/emotion'):
+    from load_config import load_label_map
+    label_maping=load_label_map(model)
     if wanted_labels == "all":
-        return list(label_maping.values())
+        return list(label_maping.values()), list(label_maping.keys())
     return [label_maping[wr_label] for wr_label in wanted_labels],wanted_labels
 
 def get_dict_labels(neurons_all_activations, keys, wanted_labels):
