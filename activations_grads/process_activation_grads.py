@@ -130,7 +130,7 @@ if __name__ == '__main__':
     plt.ylabel('True Positive Rate')
     plt.title('Multi-class ROC Curve')
     plt.legend(loc="lower right")
-    plt.show()
+    plt.savefig(f'roc_curve_{layer_num}_{reduce_dim_method}.png')
 
 
 
