@@ -52,7 +52,7 @@ if __name__ == '__main__':
         top_k_features = {}
         k = 100
         for label in all_activations.keys():
-            gradients = all_activations[label]['gradients']
+            gradients = all_activations[label]['gradients'][layer_num, ...]
             gradients = gradients.numpy()
             tokenwise_importance = np.abs(gradients).sum(axis=1)
             tokenwise_importance = tokenwise_importance.mean(axis=0)
@@ -74,19 +74,19 @@ if __name__ == '__main__':
         union_features = list(union_features)
         print(f"n Union features: {len(union_features)}")
 
-        features_dict = {}
-        for label in wanted_labels:
-            for feature in top_k_features[label]:
-                features_dict[feature] = features_dict.get(feature, 0) + 1
+        # features_dict = {}
+        # for label in wanted_labels:
+        #     for feature in top_k_features[label]:
+        #         features_dict[feature] = features_dict.get(feature, 0) + 1
 
-        activations = torch.cat([all_activations[label]['activations'] for label in all_activations.keys()], dim=0)
+        activations = torch.cat([all_activations[label]['activations'][layer_num, ...] for label in all_activations.keys()], dim=0)
         selected_features_activations = activations[:, :, union_features]
 
         # pool across tokens
         X = selected_features_activations.mean(axis=1)
 
     elif reduce_dim_method == 'mean_0':
-        X = torch.cat([all_activations[label]['activations'] for label in all_activations.keys()], dim=0)
+        X = torch.cat([all_activations[label]['activations'][layer_num, ...] for label in all_activations.keys()], dim=0)
         X = X.mean(dim=1)
 
     labels = [label_map[label] for label in all_activations.keys() for _ in range(all_activations[label]['activations'].shape[0])]
