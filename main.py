@@ -100,7 +100,7 @@ def explore_neurons_main():
         print("Using CPU")
 
     # Load Train & Validation DataLoaders
-    dataloader_train, dataloader_eval, dataloader_test = get_neuron_dataloader(
+    dataloader_train, dataloader_val, dataloader_test = get_neuron_dataloader(
         wanted_labels=current_config['CURRENT_STEP']['WANTED_LABELS'],
         layer_index=current_config['NEURON_DATASET_PARAMS']['LAYER_IDX'],  # Example: select specific layers
         data_type="activations",
@@ -108,7 +108,7 @@ def explore_neurons_main():
     )
 
     print(f"Train samples: {len(dataloader_train.dataset)}")
-    print(f"Validation samples: {len(dataloader_eval.dataset)}")
+    print(f"Validation samples: {len(dataloader_val.dataset)}")
     print(f"Test samples: {len(dataloader_test.dataset)}\n")
 
 
@@ -118,9 +118,11 @@ def explore_neurons_main():
     optimizer = torch.optim.Adam(model.parameters(), lr=current_config['CURRENT_STEP']['LR_SAE'],
         weight_decay=current_config['CURRENT_STEP']['WEIGHT_DECAY'])
     scale = str(current_config['CURRENT_STEP']['OUT_SCALE']).replace(".", "")
-    model, optimizer, val_loss = load_best_weights(model, optimizer, os.path.join(os.getcwd(), 'models_weights', f"{current_config['CURRENT_STEP']['MODEL']}_try1_final_{scale}_layer{current_config['NEURON_DATASET_PARAMS']['LAYER_IDX']}.pth"))
+    alpha = str(current_config['CURRENT_STEP']['ALPHA_SPARSITY']).replace(".", "")
+    model, optimizer, val_loss = load_best_weights(model, optimizer, os.path.join(os.getcwd(), 'models_weights', f"{current_config['CURRENT_STEP']['MODEL']}_final_scale{scale}_alpha{alpha}_layer{current_config['NEURON_DATASET_PARAMS']['LAYER_IDX']}.pth"))
 
-    predict_layer_activation(model, dataloader_eval, device, layer_idx=current_config['NEURON_DATASET_PARAMS']['LAYER_IDX'], scale_str=scale)
+    predict_layer_activation(model, dataloader_val, dataloader_test, device, layer_idx=current_config['NEURON_DATASET_PARAMS']['LAYER_IDX'], scale_str=scale, alpha_str=alpha,
+                             wanted_labels=current_config['CURRENT_STEP']['WANTED_LABELS'])
 
 
 

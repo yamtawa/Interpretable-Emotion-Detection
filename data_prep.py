@@ -149,7 +149,7 @@ class LayerDataset(Dataset):
         self.label_mapping, self.labels = get_wanted_label(wanted_labels)
 
         self.all_data = []  # Store (activation, gradient, label, layer_idx)
-
+        print(f"Loading Layer {layer_index} dataset")
         # Load each sentiment file
         for sentiment in self.labels:
             file_path = os.path.join(data_dir, f"activations_grads_{sentiment}_layer{layer_index}.pt")

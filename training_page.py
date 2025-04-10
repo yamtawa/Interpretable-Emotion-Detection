@@ -138,6 +138,7 @@ def eval_SAE(model, loader, criterion, device, current_config):
 def training_loop_SAE(model, train_loader, test_loader, optimizer, criterion, device, best_val_loss, current_config, plot_loss=True, save_weights_every=None):
     num_epochs = current_config['CURRENT_STEP']["NUM_EPOCHS"]
     scale = str(current_config['CURRENT_STEP']['OUT_SCALE']).replace(".", "")
+    alpha = str(current_config['CURRENT_STEP']['ALPHA_SPARSITY']).replace(".", "")
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, num_epochs, eta_min=1e-6)
     val_loss_l, train_loss_l = [], []
 
@@ -171,12 +172,12 @@ def training_loop_SAE(model, train_loader, test_loader, optimizer, criterion, de
         train_loss_l.append(train_loss)
     # Save the final model at the end of training
     final_model_path = os.path.join(os.getcwd(), 'models_weights',
-                                    f"SAE_try1_final_{scale}_layer{current_config['NEURON_DATASET_PARAMS']['LAYER_IDX']}.pth")
+                                    f"SAE_final_scale{scale}_alpha{alpha}_layer{current_config['NEURON_DATASET_PARAMS']['LAYER_IDX']}.pth")
     save_best_weights(model, optimizer, num_epochs, val_loss, final_model_path)
     print(f"✅ Final model saved at epoch {num_epochs}")
     if plot_loss:
         # Plot the loss curves
-        plot_loss_curve(train_loss_l, val_loss_l, save_path=os.path.join(os.getcwd(), 'figures', f"loss_plot_SAE_{scale}_layer{current_config['NEURON_DATASET_PARAMS']['LAYER_IDX']}.png"))
+        plot_loss_curve(train_loss_l, val_loss_l, save_path=os.path.join(os.getcwd(), 'figures', f"loss_plot_SAE_{scale}_alpha{alpha}_layer{current_config['NEURON_DATASET_PARAMS']['LAYER_IDX']}.png"))
 
     return model, best_val_loss
 

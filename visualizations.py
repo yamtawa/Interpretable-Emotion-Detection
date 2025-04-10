@@ -36,3 +36,16 @@ def visualize_c_heatmap(c, sentiment,save_path=None, scale_str='2'):
         plt.savefig(save_path, dpi=300)
         print(f"✅ Heatmap saved to {save_path}")
     plt.show()
+
+def visualize_F_heatmap(F_matrix, sentiment,save_path=None, scale_str='2'):
+    plt.figure(figsize=(12, 6))
+    sns.heatmap(F_matrix, cmap="Reds", cbar=True, linewidths=0.5)
+
+    plt.xlabel(f"Dictionary Features ({scale_str}d)")
+    plt.ylabel("Hidden dim")
+    plt.title(f"Dictionary features mat: F Matrix, real sentiment: {sentiment}")
+
+    if save_path:
+        plt.savefig(save_path, dpi=300)
+        print(f"✅ Heatmap saved to {save_path}")
+    plt.show()
