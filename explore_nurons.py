@@ -40,8 +40,8 @@ def loop_batches(model, dataloaders, device, criterion, function_name='extract_n
     exp_func = get_function_from_name(function_name)
     keys,wanted_labels = get_wanted_label(wanted_labels, load_config()["DATASET_PARAMS"]["DATASET_NAME"])  # keys is a list of keys
     values = [dataloaders[key] for key in keys if key in dataloaders]
-    activations_dict_path=os.path.join(save_dir,'activations_dict.pkl')
-    grad_activations_dict_path=os.path.join(save_dir,'grad_activations_dict.pkl')
+    activations_dict_path = os.path.join(save_dir, 'activations_dict.pkl')
+    grad_activations_dict_path = os.path.join(save_dir, 'grad_activations_dict.pkl')
 
     if os.path.isfile(activations_dict_path) and os.path.isfile(grad_activations_dict_path):
         neurons_all_activations=load_pkl2dict(activations_dict_path)
