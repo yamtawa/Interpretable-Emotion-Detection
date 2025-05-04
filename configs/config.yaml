@@ -7,6 +7,13 @@ DATASET_PARAMS:
   DATASET_NAME: dair-ai/emotion      #Choose one of [ "dair-ai/emotion","jeffnyman/emotions","go_emotions"]
   BATCH_SIZE: 16
 
+NEURON_DATASET_PARAMS:
+  DATASET_NAME: layer_activations
+  LAYER_IDX: 5
+  BATCH_SIZE: 256
+  ROW_NEURONS: True
+
+
 MODELS_PARAMS:
   MODEL_NAME: bert-base-uncased
 
@@ -24,17 +31,26 @@ PIPLINE:
     MOMENTUM: 0.1
     NUM_EPOCHS: 20
     TRAINING_PHASE: train_from_scratch   #choose one of [train_from_scratch, retrain, eval]
-    FINE_TUNE_ONLY: True
+    FINE_TUNE_ONLY: False
 
   step2:
     TITLE: NEURON_EXPLORATION
     ACTIVATE: True
-    WANTED_LABELS: ['anger','fear']  #choose one of 'all' ['angry','happy'] ...
+    WANTED_LABELS: [ 'anger', 'fear', 'joy', 'love', 'sadness', 'surprise']  #choose one of 'all' ['angry','happy'] ...
     NEURONS_FUNCTION_NAME: get_most_activated_neurons_per_label
-    CRITERION_NAME: CE
+    MODEL_NAME: SAE_row #choose the relevant model
+    CRITERION_NAME: CE #Choose SAELoss for SAE row training
+    SCHEDULER_NAME: CosineAnnealingLR
     OPTIMIZER_NAME: Adam
     LR_FEATURES: 0.0001
     LR_HEAD: 0.0001
     WEIGHT_DECAY: 0.01
     MOMENTUM: 0.1
+    ALPHA_SPARSITY: 0.5
+    LANG_INPUT: 128
+    LANG_D: 768
+    OUT_SCALE: 2
+    NUM_EPOCHS: 10
+    TRAINING_PHASE: eval   #choose one of [train_from_scratch, retrain, eval, collect_activations]
     FINE_TUNE_ONLY: False
+    MODEL: SAE_row

@@ -1,13 +1,13 @@
 import os
 import numpy as np
 import torch
-from data_prep import get_dataloader
-from models import EmotionBERT
+from data_prep import get_dataloader, get_neuron_dataloader
+from models import EmotionBERT, SAE_row, SAELoss
 from load_config import load_config
-from training_page import training_loop, eval
+from training_page import training_loop, eval, training_loop_SAE, train_SAE, eval_SAE
 from criterions_and_optimizers import set_optimizer, set_criterion
 from weights_loader import load_best_weights
-from explore_nurons import loop_batches
+from explore_nurons import loop_batches, predict_layer_activation
 
 def backbone_main():
     best_val_loss = np.inf
@@ -42,6 +42,7 @@ def backbone_main():
 
 
 def explain_neurons_main():
+    best_val_loss = np.inf
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     _, dataloader_explore= get_dataloader(dataset_name=current_config["DATASET_PARAMS"]["DATASET_NAME"],
                                       batch_size=current_config["DATASET_PARAMS"]["BATCH_SIZE"], split='train',ratio_small=5,labels_dl=True)
@@ -53,8 +54,56 @@ def explain_neurons_main():
     weights_path=os.path.join(os.getcwd(), 'models_weights',f"{current_config['GENERAL']['SAVED_MODEL_NAME'][1]}.pth")
     if os.path.isfile(weights_path):
         model, _ = load_best_weights(model, optimizer, weights_path)
-    loop_batches(model,dataloader_explore,device,criterion=criterion,function_name=current_config['CURRENT_STEP']['NEURONS_FUNCTION_NAME'],wanted_labels=current_config['CURRENT_STEP']['WANTED_LABELS'] )
+    if current_config['CURRENT_STEP']['TRAINING_PHASE'] == "collect_activations":
+        loop_batches(model,dataloader_explore,device,criterion=criterion,function_name=current_config['CURRENT_STEP']['NEURONS_FUNCTION_NAME'],wanted_labels=current_config['CURRENT_STEP']['WANTED_LABELS'] )
 
+
+    # Load row Train & Validation DataLoaders
+    dataloader_train, dataloader_eval, dataloader_test = get_neuron_dataloader(
+        wanted_labels=current_config['CURRENT_STEP']['WANTED_LABELS'],
+        layer_index=current_config['NEURON_DATASET_PARAMS']['LAYER_IDX'],  # Example: select specific layers
+        data_type="activations",
+        batch_size=current_config['CURRENT_STEP']['LANG_INPUT'], N=current_config['CURRENT_STEP']['LANG_INPUT']
+    )
+    print(f"Train samples: {len(dataloader_train.dataset)}")
+    print(f"Validation samples: {len(dataloader_eval.dataset)}")
+    print(f"Test samples: {len(dataloader_test.dataset)}\n")
+
+    # Initialize SAE Model
+    sae = SAE_row(input_dim=current_config['CURRENT_STEP']['LANG_D'],
+              d_feat_scale=current_config['CURRENT_STEP']['OUT_SCALE']).to(device)  # Assuming hidden size = 768
+
+    if current_config['CURRENT_STEP']['TRAINING_PHASE'] == "training_from_scratch" and current_config['CURRENT_STEP']['MODEL'] == 'SAE_row':
+
+        # Define Optimizer & Custom SAE Loss
+        optimizer = torch.optim.Adam(
+            sae.parameters(),
+            lr=current_config['CURRENT_STEP']['LR_HEAD'],
+            weight_decay=current_config['CURRENT_STEP']['WEIGHT_DECAY']
+        )
+        criterion = SAELoss(alpha_sparsity=current_config['CURRENT_STEP']['ALPHA_SPARSITY'])  # SAE loss (MSE + L1 sparsity)
+
+        # Load best weights if retraining or evaluating
+
+        sae, best_val_loss = training_loop_SAE(
+            sae, dataloader_train, dataloader_eval, optimizer, criterion, device, best_val_loss, current_config
+        )
+    elif current_config['CURRENT_STEP']['TRAINING_PHASE'] == "eval":
+        model = SAE_row(input_dim=current_config['CURRENT_STEP']['LANG_D'],
+                    d_feat_scale=current_config['CURRENT_STEP']['OUT_SCALE']).to(device)  # Assuming hidden size = 768
+        optimizer = torch.optim.Adam(model.parameters(), lr=current_config['CURRENT_STEP']['LR_HEAD'],
+                                     weight_decay=current_config['CURRENT_STEP']['WEIGHT_DECAY'])
+        scale = str(current_config['CURRENT_STEP']['OUT_SCALE']).replace(".", "")
+        alpha = str(current_config['CURRENT_STEP']['ALPHA_SPARSITY']).replace(".", "")
+        model, val_loss = load_best_weights(model, optimizer, os.path.join(os.getcwd(), 'models_weights',
+                                                                                      f"SAE_final_scale{scale}_alpha{alpha}_layer{current_config['NEURON_DATASET_PARAMS']['LAYER_IDX']}.pth"))
+        load_best_weights(model, optimizer, os.path.join(os.getcwd(), 'models_weights',
+                                                         f"SAE_final_scale{scale}_alpha{alpha}_layer{current_config['NEURON_DATASET_PARAMS']['LAYER_IDX']}.pth"))
+
+        predict_layer_activation(model, dataloader_eval, dataloader_test, device,
+                                 layer_idx=current_config['NEURON_DATASET_PARAMS']['LAYER_IDX'], scale_str=scale,
+                                 alpha_str=alpha,
+                                 wanted_labels=current_config['CURRENT_STEP']['WANTED_LABELS'])
 
 
 
@@ -74,17 +123,25 @@ if __name__ == "__main__":
         current_config['CURRENT_STEP']['LR_FEATURES'] = s['LR_FEATURES']
         current_config['CURRENT_STEP']['LR_HEAD'] = s['LR_HEAD']
         current_config['CURRENT_STEP']['CRITERION_NAME'] = s['CRITERION_NAME']
+        current_config['CURRENT_STEP']['NUM_EPOCHS'] = s['NUM_EPOCHS']
+        current_config['CURRENT_STEP']['TRAINING_PHASE'] = s['TRAINING_PHASE']
+        current_config['CURRENT_STEP']['WEIGHT_DECAY'] = s['WEIGHT_DECAY']
 
         if s['TITLE']=="MODEL_TRAINING":
-            current_config['CURRENT_STEP']['TRAINING_PHASE'] = s['TRAINING_PHASE']
-            current_config['CURRENT_STEP']['NUM_EPOCHS'] = s['NUM_EPOCHS']
-            current_config['CURRENT_STEP']['SCHEDULER_NAME'] = s['SCHEDULER_NAME']
+
+
             print(current_config['CURRENT_STEP'])
             backbone_main()
 
         elif  s['TITLE']=="NEURON_EXPLORATION":
+            current_config['CURRENT_STEP']['SCHEDULER_NAME'] = s['SCHEDULER_NAME']
             current_config['CURRENT_STEP']['WANTED_LABELS']=s['WANTED_LABELS']
             current_config['CURRENT_STEP']['NEURONS_FUNCTION_NAME']=s['NEURONS_FUNCTION_NAME']
+            current_config['CURRENT_STEP']['LANG_INPUT'] = s['LANG_INPUT']
+            current_config['CURRENT_STEP']['LANG_D'] = s['LANG_D']
+            current_config['CURRENT_STEP']['OUT_SCALE'] = s['OUT_SCALE']
+            current_config['CURRENT_STEP']['ALPHA_SPARSITY'] = s['ALPHA_SPARSITY']
+            current_config['CURRENT_STEP']['MODEL'] = s['MODEL']
 
 
             explain_neurons_main()
