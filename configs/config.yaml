@@ -29,7 +29,7 @@ PIPLINE:
   step2:
     TITLE: NEURON_EXPLORATION
     ACTIVATE: True
-    WANTED_LABELS: ['anger','fear']  #choose one of 'all' ['angry','happy'] ...
+    WANTED_LABELS: 'all' #choose one of 'all' ['angry','happy'] ...
     NEURONS_FUNCTION_NAME: get_most_activated_neurons_per_label
     CRITERION_NAME: CE
     OPTIMIZER_NAME: Adam

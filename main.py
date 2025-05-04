@@ -44,7 +44,7 @@ def backbone_main():
 def explain_neurons_main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     _, dataloader_explore= get_dataloader(dataset_name=current_config["DATASET_PARAMS"]["DATASET_NAME"],
-                                      batch_size=current_config["DATASET_PARAMS"]["BATCH_SIZE"], split='train',ratio_small=5,labels_dl=True)
+                                      batch_size=current_config["DATASET_PARAMS"]["BATCH_SIZE"], split='train',ratio_small=1,labels_dl=True)
     model = EmotionBERT(model_name=current_config["MODELS_PARAMS"]["MODEL_NAME"],
                         num_labels=len(dataloader_explore),
                         fine_tune_only=current_config["CURRENT_STEP"]["FINE_TUNE_ONLY"]).to(device)
