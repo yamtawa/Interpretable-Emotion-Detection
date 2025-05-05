@@ -1,5 +1,5 @@
+import json
 import os
-
 import torch
 from sklearn.linear_model import LogisticRegression
 from sklearn.cluster import KMeans
@@ -7,6 +7,7 @@ import scipy.stats
 from utils import get_wanted_label,get_dict_labels
 from collections import defaultdict
 import pickle
+UNLABELED=False
 
 
 def get_function_from_name(function_name):
@@ -18,11 +19,15 @@ def get_function_from_name(function_name):
         return train_probing_classifier
     elif function_name == 'cluster_neurons':
         return cluster_neurons
+    elif function_name == 'select_n_neurons':
+        from  neurons_selections_try2 import main
+        return main
     raise ValueError(
         "Unknown exploration function name. Choose one of [extract_neuron_activations,compute_neuron_correlation,train_probing_classifier,compute_saliency,cluster_neurons]")
 
 def load_pkl2dict(dict_path):
     with open(dict_path, 'rb') as f:
+        print(dict_path)
         dic = pickle.load(f)
     return dic
 
@@ -31,7 +36,6 @@ def save_dict2pkl(dict_path,dict):
     with open(dict_path, 'wb') as f:
         pickle.dump(dict, f, protocol=pickle.HIGHEST_PROTOCOL)
 
-# TODO - Consider the case when you want to differentiate between true predictions and false predictions of a label.
 
 def loop_batches(model, dataloaders, device, criterion, function_name='extract_neuron_activations',wanted_labels='all',saved_activations_path=r'saved_activations'):
     exp_func = get_function_from_name(function_name)
@@ -39,9 +43,9 @@ def loop_batches(model, dataloaders, device, criterion, function_name='extract_n
     values = [dataloaders[key] for key in keys if key in dataloaders]
     neurons_all_activations = {}
     neurons_all_gradients = {}
-    activations_dict_path=os.path.join(saved_activations_path,'activations_dict.pkl')
-    grad_activations_dict_path=os.path.join(saved_activations_path,'grad_activations_dict.pkl')
-
+    activations_dict_path=os.path.join(saved_activations_path,'activations_dict_unlabeled.pkl')
+    grad_activations_dict_path=os.path.join(saved_activations_path,'grad_activations_dict_unlabeled.pkl')
+    l=[]
     if os.path.isfile(activations_dict_path) and os.path.isfile(grad_activations_dict_path):
         neurons_all_activations=load_pkl2dict(activations_dict_path)
         neurons_all_gradients = load_pkl2dict(grad_activations_dict_path)
@@ -53,6 +57,10 @@ def loop_batches(model, dataloaders, device, criterion, function_name='extract_n
                 data = batch[0].to(device)
                 attention_mask = batch[1].to(device)
                 target = batch[2].to(device)
+                if UNLABELED:
+                    one_sample_dict=do_unlabeled(model,data,attention_mask,criterion,range(6),target)
+                    l.append(one_sample_dict)
+                    continue
                 model.zero_grad()
                 logits, hidden_states = model(data, attention_mask)
                 for layer in hidden_states:
@@ -72,13 +80,33 @@ def loop_batches(model, dataloaders, device, criterion, function_name='extract_n
                     # Free up memory after each batch
                     del data, attention_mask, target, logits, hidden_states
                     torch.cuda.empty_cache()  # Clear CUDA cache
+
+
             neurons_all_activations[wanted_labels[idx]] = torch.stack(list(neuron_label_activation.values()))
             neurons_all_gradients[wanted_labels[idx]] = torch.stack(list(neuron_label_gradients.values()))
         save_dict2pkl(activations_dict_path, neurons_all_activations)
         save_dict2pkl(grad_activations_dict_path, neurons_all_gradients)
-
+    # with open('selected_grads.json', 'w') as f:
+    #     json.dump(l, f)
     d_labels=get_dict_labels(neurons_all_activations,keys,wanted_labels)
     exp_func(neurons_all_activations,d_labels)
+def do_unlabeled(model,data,attention_mask,criterion,targets,real_target):
+    one_sample_dict={}
+    with open('wanted_indices_768.json', 'r') as f:
+        wanted_neuorns = json.load(f)
+    for target in targets:
+        model.zero_grad()
+        logits, hidden_states = model(data, attention_mask)
+        hidden_states[-1].retain_grad()
+
+        loss = criterion(logits, torch.tensor(target).cuda().unsqueeze(0))
+        loss.backward()
+        grad_cpu = hidden_states[-1].grad.clone().detach().cpu()
+        one_sample_dict[target] = grad_cpu.flatten()[wanted_neuorns].tolist()
+    one_sample_dict['true_label']=float(real_target)
+    return one_sample_dict
+
+
 
 
 def get_most_activated_neurons_per_label(neurons_all_activations: dict,d_labels:dict):
@@ -96,7 +124,7 @@ def compute_neuron_correlation(neuron_activations, emotion_labels):  # TODO - Th
     return correlations
 
 
-def train_probing_classifier(activations, labels):  # TODO - This is the scratch it doesnt work yet
+def train_probing_classifier(activations, labels):
 
     clf = LogisticRegression(max_iter=1000)
     clf.fit(activations, labels)
@@ -104,8 +132,7 @@ def train_probing_classifier(activations, labels):  # TODO - This is the scratch
     return clf.coef_  # Feature importance per neuron
 
 
-def cluster_neurons(neuron_activations, labels, num_clusters=6):  # TODO - This is the scratch it doesnt work yet
-
+def cluster_neurons(neuron_activations, labels, num_clusters=6):
     kmeans = KMeans(n_clusters=num_clusters, random_state=42)
     cluster_labels = kmeans.fit_predict(neuron_activations)
 

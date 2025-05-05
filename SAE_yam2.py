@@ -88,11 +88,10 @@ class SparseAutoencoder_Conv(nn.Module):
         x_flat = x.view(batch_size, -1)  # [batch_size, 128 * 768]
         P = torch.einsum('bi,il->bil', x_flat,
                          self.pixel_weights_encoder) + self.bias_encoder  # [batch_size, 128 * 768, latent_channels]
-        P[:,:,0]=F.gumbel_softmax(P[:,:,0], tau=0.1, hard=True)
 
         P = P.permute(0, 2, 1).view(batch_size, self.latent_channels, self.input_size[1],
                                     self.input_size[2])  # [batch_size, latent_channels, 128, 768]
-        P[:,1:]=self.sharp_sigmoid(P[:,1:])
+        P=self.sharp_sigmoid(P)
         logits=self.mlp_head((P[:,0]*x.squeeze(1)).reshape(batch_size,P.shape[-1]*P.shape[-2]))
 
         P_flat = P.view(batch_size, self.latent_channels, -1)  # [batch_size, latent_channels, 128 * 768]
@@ -161,7 +160,7 @@ def training_loop(model, dataloader,targets_names, optimizer, scheduler, num_cla
             output, P, logits = model(input_tensor)
             for cls in targets.detach().unique():
                 P0_batch_l.append(P[:, 0].mean(axis=0))
-            if (epoch % 2 == 0 or epoch == epochs - 1) and save_plot:
+            if (epoch % 10 == 0 or epoch == epochs - 1) and save_plot:
                 plot_reconstruction(input_tensor, output,targets_names[indices[0]], P,P0_mean_l[-1] if len(P0_mean_l)>0 else [] , epoch + 1)
                 print(f"\nInput abs mean: {torch.abs(input_tensor).mean().item():.6f}")
                 print(f"Output abs mean: {torch.abs(output).mean().item():.6f}")
@@ -261,7 +260,7 @@ def create_dataloaders(data,one_key_only=False):
 
     if one_key_only:
         dataset = TensorDataset(
-            data[one_key_only][2].unsqueeze(1))#[:100, :, 50:100, 100:150]  # sape of [num_samples_per_label,1,128,768]
+            data[one_key_only][5].unsqueeze(1))#[:100, :, 50:100, 100:150]  # sape of [num_samples_per_label,1,128,768]
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
         return dataloader
 
@@ -269,7 +268,7 @@ def create_dataloaders(data,one_key_only=False):
     targets = []
 
     for key in data.keys():
-        tensor = data[key][WANTED_LAYER].unsqueeze(1)#[:100, :, 50:100, 100:150]
+        tensor = data[key][5].unsqueeze(1)#[:100, :, 50:100, 100:150]
         data_tensors.append(tensor)
         targets.extend([key] * tensor.size(0))  # Repeat the key as target for each sample
     data_tensor = torch.cat(data_tensors, dim=0)
@@ -284,8 +283,7 @@ def create_dataloaders(data,one_key_only=False):
 def split_data_dict(data):
     train_d = {}
     test_d = {}
-    merged = { k: torch.stack([d[k] for d in data], dim=2)for k in data[0].keys()}
-    for key, tensor_data in merged.items():
+    for key, tensor_data in data.items():
         split_idx = tensor_data.shape[1] // 2
         train_d[key] = tensor_data[:, :split_idx]
         test_d[key] = tensor_data[:, split_idx:]
@@ -353,35 +351,33 @@ def run():
     os.makedirs(rf'plots\{run_name}',exist_ok=True)
     os.makedirs(rf'SAE_models_weights',exist_ok=True)
 
-    data_l=[load_pkl2dict(path) for path in path_to_pkl]
-    train_d, test_d=split_data_dict(data_l)
+    data=load_pkl2dict(path_to_pkl)
+    train_d, test_d=split_data_dict(data)
     dataloader,targets_names=create_dataloaders(train_d)
-
    #TODO- make this controlable from CFG
     if wanted_model=="CONV":
-        model = SparseAutoencoder_Conv(input_size=input_size, latent_channels=20,num_classes=num_class)
+        model = SparseAutoencoder_Conv(input_size=input_size, latent_channels=100,num_classes=num_class)
     elif wanted_model=="LINEAR":
-        model = SparseAutoencoder_Linear(input_size=input_size[-1], latent_channels=20)
+        model = SparseAutoencoder_Linear(input_size=input_size[-1], latent_channels=100)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=0.000001)
     loss_history,sparsity_loss, accuracy_history,clusteres,P0_mean_d=training_loop(model, dataloader,targets_names, optimizer,scheduler, num_class, epochs=epochs,device=device)
     plot_loss(loss_history, sparsity_loss)
     plot_accuracy(accuracy_history)
-    cluster_and_plot(clusteres,saved_name=run_name)
+    cluster_and_plot(clusteres)
 
 # Example usage
 if __name__ == '__main__':
     batch_size = 16
     input_size = (1,128,768)
     wanted_model="CONV"
-    run_name='CONV_with_one_mask_activations_only_layer_5'
-    epochs=1
+    run_name='CONV_with_one_masked_label_1_4'
+    epochs=200
     num_class=6
-    WANTED_LAYER=5
 
     CFG = load_config(config_name='config')
-    path_to_pkl=[r'saved_activations/activations_dict.pkl',r'saved_activations/grad_activations_dict.pkl']
+    path_to_pkl=r'saved_activations/grad_activations_dict.pkl'
     device='cuda' if torch.cuda.is_available() else 'cpu'
     run()
 
